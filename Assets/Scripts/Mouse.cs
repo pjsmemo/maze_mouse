@@ -24,14 +24,14 @@ public class Mouse : MonoBehaviour
     private Maze m_maze;
 
 
-    private int m_posX = 0;
-    private int m_posY = 0;
-    private Way m_dir = Way.Up;
+    private Vector2Int m_pos = new Vector2Int(0,0);
+    private Vector2Int m_dir = new Vector2Int(0,1);
 
-    private const int RIGHT_INDEX = 0;
-    private const int UP_INDEX = 1;
-    private const int LEFT_INDEX = 2;
-    private const int BACK_INDEX = 3;
+    private float UP_DEGREE = 0f;
+    private float RIGHT_DEGREE = -90f;
+    private float BACK_DEGREE = 180f;
+    private float LEFT_DEGREE = 90f;
+
 
     private void Initlize ()
     {
@@ -42,14 +42,23 @@ public class Mouse : MonoBehaviour
     private void ResetPosition ()
     {
         SetIndexByStartPosition();
-        m_tn.position = m_maze.GetPosition(m_posX, m_posY);
+
+        SyncTransform();        
+    }
+
+    void SyncTransform ()
+    {
+        m_tn.position = m_maze.IndexToWorldPosition(m_pos.x, m_pos.y);
+
     }
 
     private void SetIndexByStartPosition ()
     {
-        m_posX = m_maze.GetStartIndexX();
-        m_posY = m_maze.GetStartIndexY();
-        m_dir = Way.Up;
+        m_pos.x = m_maze.GetStartIndexX();
+        m_pos.y = m_maze.GetStartIndexY();
+        
+        m_dir = new Vector2Int(0, 1);
+        RotationHead(Direction.Up);
     }
 
     private void SetMaze (Maze maze)
@@ -67,7 +76,7 @@ public class Mouse : MonoBehaviour
 
     
 
-    enum Way
+    enum Direction
     {
         Right = 0,
         Up = 1,
@@ -76,109 +85,129 @@ public class Mouse : MonoBehaviour
     }
 
 
-    private int [,] m_mouseDirUp = new int[,]
-        {
-            // y, x
-            { 0,1 },  // right
-            { 1,0 },  // up
-            { 0,-1 }, // left
-            { -1,0 }, // back
-        };
-
-    private int [,] m_mouseDirRight = new int[,]
-        {
-            // y, x
-            { -1,0 },  // right
-            { 0,1 },  // up
-            { 1,0 }, // left
-            { 0,-1 }, // back
-        };
-
-    private int [,] m_mouseDirLeft = new int[,]
-        {
-            // y, x
-            { 1,0 },  // right
-            { 0,-1 },  // up
-            { -1,0 }, // left
-            { 0,1 }, // back
-        };
-
-    private int [,] m_mouseDirDown = new int[,]
-        {
-            // y, x
-            { 0,-1 },  // right
-            { -1,0 },  // up
-            { 0,1 }, // left
-            { 1,0 }, // back
-        };
-
-    private int [,] m_arrowIndex = new int[,]
-        {
-            { 1,0 },  // right
-            { 0,1 },  // up
-            { -1,0 }, // left
-            { 0,-1 }, // back
-        };
-
 
     IEnumerator FindDoorRoutine ()
     {
         while (true) {
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(0.1f);
 
             // 길찾기.
             // right 검사.
-            Debug.Log(JudgeWay(Way.Right));
-            Debug.Log(JudgeWay(Way.Left));
-            Debug.Log(JudgeWay(Way.Up));
-            Debug.Log(JudgeWay(Way.Back));
-            // up 검사.
-            // left 검사.
-            // back 검사.
-
-            // 방향 전환.
-
-            // 이동.
+            if (JudgeDirection(Direction.Right) != Judgment.Wall) {
+                yield return MoveRoutine(Direction.Right);
+            } else if (JudgeDirection(Direction.Up) != Judgment.Wall) {
+                yield return MoveRoutine(Direction.Up);
+            } else if (JudgeDirection(Direction.Left) != Judgment.Wall) {
+                yield return MoveRoutine(Direction.Left);
+            } else if (JudgeDirection(Direction.Back) != Judgment.Wall) {
+                yield return MoveRoutine(Direction.Back);
+            } else {
+                Debug.LogError("err");
+            }
 
             // 출구이면 종료.
+            if ( m_maze.GetBlockInfo(m_pos) == Judgment.End) {
+                Debug.LogError("finish");
+                break;
+            }
 
             // 아니면 반복. 
-
-            break;
         }
     }
 
-    private Judgment JudgeWay (Way judgeWay)
+    IEnumerator MoveRoutine (Direction dir)
     {
-        Vector2Int v2 = WayToIndex(m_dir, judgeWay);
-
-        Debug.Log("m_dir : " + m_dir);
-        Debug.Log("way : " + judgeWay);
-        Debug.Log("v2 : " + v2);
-
-        v2.x += m_posX;
-        v2.y += m_posY;
-
-        return m_maze.GetWayInfo(v2);
+        RotationHead(dir);
+        yield return new WaitForSeconds(0.1f);
+        MoveFoward();
+        yield return new WaitForSeconds(0.1f);
     }
 
-    private Vector2Int WayToIndex (Way dir, Way way)
+    void RotationHead (Direction dir)
+    {
+        m_dir = RotationIndex(m_dir, dir);
+
+
+        float angle = 0;
+
+        if (m_dir.x == 0) {
+            if (m_dir.y == 1) {
+                angle = 0;
+            }
+            else {
+                angle = 180;
+            }
+        }
+        else {
+            if (m_dir.x == 1) {
+                angle = -90f;
+            }
+            else {
+                angle = 90;
+            }
+        }
+        
+        m_tn.rotation = Quaternion.Euler(0, 0, angle);
+    }
+
+    void MoveFoward ()
+    {
+        m_pos.x = m_pos.x + m_dir.x;
+        m_pos.y = m_pos.y - m_dir.y;
+        SyncTransform();
+    }
+
+    private Judgment JudgeDirection (Direction judgeWay)
+    {
+        //Debug.Log("@dir : " + m_dir);
+        //Debug.Log("@judgeWay : " + judgeWay);
+
+        Vector2Int v2 = RotationIndex(m_dir, judgeWay);
+
+        //Debug.Log("@v2-1 : " + v2);
+
+        v2.x = m_pos.x + v2.x;
+        v2.y = m_pos.y - v2.y;
+
+        //Debug.Log("@v2-2 : " + v2);
+
+        return m_maze.GetBlockInfo(v2);
+    }
+
+    public static Vector2 Rotate (Vector2 v, float degree)
+    {
+        float r = degree * Mathf.Deg2Rad;
+
+        return new Vector2(
+            v.x * Mathf.Cos(r) - v.y * Mathf.Sin(r),
+            v.x * Mathf.Sin(r) + v.y * Mathf.Cos(r)
+        );
+    }
+
+    private Vector2Int RotationIndex (Vector2Int fromV2, Direction toDir)
+    {
+        Vector2 v = Rotate(fromV2, DirToDegree(toDir));
+
+        return new Vector2Int((int)v.x, (int)v.y);
+    }
+
+    private float DirToDegree (Direction dir)
     {
         switch (dir) {
-            case Way.Right: {
-                int y = m_mouseDirRight[(int)way, 0];
-                int x = m_mouseDirRight[(int)way, 1];
-                return new Vector2Int(x, y);
-            }
+            case Direction.Up:
+                return UP_DEGREE;
 
-            case Way.Up: {
-                int y = m_mouseDirUp[(int)way, 0];
-                int x = m_mouseDirUp[(int)way, 1];
-                return new Vector2Int(x, y);
-            }
+            case Direction.Right:
+                return RIGHT_DEGREE;
+
+            case Direction.Back:
+                return BACK_DEGREE;
+
+            case Direction.Left:
+                return LEFT_DEGREE;
 
             default:
-                return Vector2Int.zero;
+                return 0;
         }
     }
 }

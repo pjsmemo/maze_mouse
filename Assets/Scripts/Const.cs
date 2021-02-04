@@ -4,7 +4,7 @@ using UnityEngine;
 
 enum Judgment
 {
-    Null = 0,
+    //Null = 0,
     Space = 1,
     Wall = 2,
     Start = 3,
